@@ -1,0 +1,7 @@
+python scripts/txt2img.py --prompt "Boris Johnson, bodybuilder posing, portrait surrounded by hibiscus flowers, jojo cover art, jojo anime style, david production, style of vento aureo cover art, style of stone ocean cover art, style of steel ball run cover art, style of jojolion cover art, ilya kuvshinov style, illustrated by hirohiko araki" --plms --n_iter 10 --n_samples 1
+
+python optimizedSD/optimized_img2img.py --prompt "detailed eyes" --init-img input.png --strength 0.8 --n_iter 2 --n_samples 10 --H 512 --W 512 
+python optimizedSD/optimized_txt2img.py --prompt "Cyberpunk style image of a Tesla car reflection in rain" --H 512 --W 512 --seed 27 --n_iter 2 --n_samples 5 --ddim_steps 50
+
+
+

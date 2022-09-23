@@ -1,0 +1,2 @@
+https://github.com/Joeb1603/stable-diffusion-joe-fork
+https://github.com/basujindal/stable-diffusion
