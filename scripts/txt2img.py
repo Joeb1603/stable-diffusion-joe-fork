@@ -9,6 +9,7 @@ from imwatermark import WatermarkEncoder
 from itertools import islice
 from einops import rearrange
 from torchvision.utils import make_grid
+from random import randint
 import time
 from pytorch_lightning import seed_everything
 from torch import autocast
@@ -23,9 +24,9 @@ from transformers import AutoFeatureExtractor
 
 
 # load safety model
-safety_model_id = "CompVis/stable-diffusion-safety-checker"
-safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
-safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
+#safety_model_id = "CompVis/stable-diffusion-safety-checker"
+#safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
+#safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 
 def chunk(it, size):
@@ -62,7 +63,7 @@ def load_model_from_config(config, ckpt, verbose=False):
 
     model.cuda()
     model.eval()
-    return model
+    return model.half()
 
 
 def put_watermark(img, wm_encoder=None):
@@ -95,6 +96,9 @@ def check_safety(x_image):
 
 
 def main():
+
+    
+    
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -216,7 +220,7 @@ def main():
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=None,
         help="the seed (for reproducible sampling)",
     )
     parser.add_argument(
@@ -228,12 +232,15 @@ def main():
     )
     opt = parser.parse_args()
 
+    
     if opt.laion400m:
         print("Falling back to LAION 400M model...")
         opt.config = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
         opt.ckpt = "models/ldm/text2img-large/model.ckpt"
         opt.outdir = "outputs/txt2img-samples-laion400m"
 
+    if opt.seed == None:
+        opt.seed = randint(0, 1000000)
     seed_everything(opt.seed)
 
     config = OmegaConf.load(f"{opt.config}")
@@ -306,7 +313,7 @@ def main():
                         x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
                         x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
 
-                        x_checked_image, has_nsfw_concept = check_safety(x_samples_ddim)
+                        x_checked_image = x_samples_ddim
 
                         x_checked_image_torch = torch.from_numpy(x_checked_image).permute(0, 3, 1, 2)
 
@@ -315,7 +322,18 @@ def main():
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                                 img = Image.fromarray(x_sample.astype(np.uint8))
                                 img = put_watermark(img, wm_encoder)
-                                img.save(os.path.join(sample_path, f"{base_count:05}.png"))
+                                if len(prompt)>30:
+                                    folder_name = str('-'.join(prompt.split(' ')[:5]))
+                                else:
+                                    folder_name = prompt
+                                #folder_name = prompt
+                                save_folder = os.path.join(sample_path, folder_name)
+                                if not os.path.exists(save_folder):
+                                    os.mkdir(save_folder)
+                                    img.save(os.path.join(save_folder, "0.png"))
+                                else:
+                                    img.save(os.path.join(save_folder, f"{len(os.listdir(save_folder))}.png"))
+                                #img.save(os.path.join(sample_path, f"{base_count:05}.png"))
                                 base_count += 1
 
                         if not opt.skip_grid:
@@ -331,13 +349,20 @@ def main():
                     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
                     img = Image.fromarray(grid.astype(np.uint8))
                     img = put_watermark(img, wm_encoder)
-                    img.save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
+                    
+                    #img.save(os.path.join(outpath, f'please_work_again.png'))
+                    img.save(os.path.join(outpath, f'grid-{len(os.listdir(outpath))+1}.png'))
                     grid_count += 1
 
                 toc = time.time()
 
     print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
           f" \nEnjoy.")
+    
+    metadata_txt_name = f"{len(os.listdir(save_folder))}-metadata.txt"
+    with open(os.path.join(save_folder, metadata_txt_name), 'w') as f:
+        f.write(f"{str(prompt)}\n")
+        f.write(f"Seed: {str(opt.seed)}")
 
 
 if __name__ == "__main__":
